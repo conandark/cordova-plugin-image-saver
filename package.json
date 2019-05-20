@@ -1,0 +1,22 @@
+{
+  "name": "cordova-plugin-image-saver",
+  "version": "0.0.1",
+  "description": "This plugin allows you to save a data url image to the iOS Photo Library or Android Gallery.",
+  "cordova": {
+    "id": "cordova-plugin-image-saver",
+    "platforms": ["ios", "android"]
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rustico-david/corodova-plugin-image-saver.git"
+  },
+  "keywords": [
+    "image",
+    "photo library",
+    "ecosystem:cordova",
+    "cordova-ios",
+    "cordova-android"
+  ],
+  "author": "Rustico David (rustico@bigtickets.com)",
+  "license": "Apache 2.0"
+}
