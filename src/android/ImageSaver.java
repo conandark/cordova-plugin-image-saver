@@ -21,34 +21,28 @@ import android.util.Log;
 
 public class ImageSaver extends CordovaPlugin {
 
-	public static final String ACTION = "saveImageToLibrary";
+	private static final String ACTION = "saveImageToLibrary";
+
+	private static final String WRITE = android.Manifest.permission.WRITE_EXTERNAL_STORAGE;
+	private static final int REQUEST_WRITE_PERMISSION = 97483;
+
+	private String base64;
+	private CallbackContext callback;
 
 	@Override
 	public boolean execute(String action, JSONArray data,
-			CallbackContext callbackContext) throws JSONException {
+		CallbackContext callbackContext) throws JSONException {
 
 		if (action.equals(ACTION)) {
 
-			String base64 = data.optString(0);
-			if (base64.equals("")) // isEmpty() requires API level 9
-				callbackContext.error("Missing base64 string");
-			
-			// Create the bitmap from the base64 string
-			byte[] decodedString = Base64.decode(base64, Base64.DEFAULT);
-			Bitmap bmp = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length);
-			if (bmp == null) {
-				callbackContext.error("The image could not be decoded");
+			this.base64 = data.optString(0);
+			this.callback = callbackContext;
+
+			// Check permission
+			if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || cordova.hasPermission(WRITE)) {
+				savePhoto();
 			} else {
-				
-				// Save the image
-				File imageFile = savePhoto(bmp);
-				if (imageFile == null)
-					callbackContext.error("Error while saving image");
-				
-				// Update image gallery
-				scanPhoto(imageFile);
-				
-				callbackContext.success(imageFile.toString());
+				cordova.requestPermission(this, REQUEST_WRITE_PERMISSION, WRITE);
 			}
 
 			return true;
@@ -57,17 +51,63 @@ public class ImageSaver extends CordovaPlugin {
 		}
 	}
 
-	private File savePhoto(Bitmap bmp) {
+	private void savePhoto() throws JSONException {
+		if (base64 == null || callback == null) {
+			return;
+		}
+
+		if (base64.equals("")) {
+			callback.error("Missing base64 string");
+		} else {
+			// Create the bitmap from the base64 string
+			byte[] decodedString = Base64.decode(base64, Base64.DEFAULT);
+			Bitmap bmp = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length);
+			if (bmp == null) {
+				callback.error("The image could not be decoded");
+			} else {
+				// Save the image
+				File imageFile = writeBitmap(bmp);
+				if (imageFile == null) {
+					callback.error("Error while saving image");
+				} else {
+					// Update image gallery
+					scanPhoto(imageFile);
+					callback.success(imageFile.toString());
+				}
+			}
+		}
+
+		base64 = null;
+		callback = null;
+	}
+
+	public void onRequestPermissionResult(int requestCode, String[] permissions,
+		int[] grantResults) throws JSONException {
+		if (callback == null) {
+			return;
+		}
+
+		if (permissions != null && permissions.length > 0) {
+			if (cordova.hasPermission(WRITE)) {
+				savePhoto();
+				return;
+			}
+		}
+
+		callback.error("The image could not be saved");
+	}
+
+	private File writeBitmap(Bitmap bmp) {
 		File retVal = null;
-		
+
 		try {
 			Calendar c = Calendar.getInstance();
-			String date = "" + c.get(Calendar.DAY_OF_MONTH)
-					+ c.get(Calendar.MONTH)
-					+ c.get(Calendar.YEAR)
-					+ c.get(Calendar.HOUR_OF_DAY)
-					+ c.get(Calendar.MINUTE)
-					+ c.get(Calendar.SECOND);
+			String date = "" + c.get(Calendar.DAY_OF_MONTH) +
+				c.get(Calendar.MONTH) +
+				c.get(Calendar.YEAR) +
+				c.get(Calendar.HOUR_OF_DAY) +
+				c.get(Calendar.MINUTE) +
+				c.get(Calendar.SECOND);
 
 			String deviceVersion = Build.VERSION.RELEASE;
 			Log.i("ImageSaver", "Android version " + deviceVersion);
@@ -82,14 +122,14 @@ public class ImageSaver extends CordovaPlugin {
 			if (check >= 1) {
 				folder = Environment
 					.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES);
-				
-				if(!folder.exists()) {
+
+				if (!folder.exists()) {
 					folder.mkdirs();
 				}
 			} else {
 				folder = Environment.getExternalStorageDirectory();
 			}
-			
+
 			File imageFile = new File(folder, "c2i_" + date.toString() + ".png");
 
 			FileOutputStream out = new FileOutputStream(imageFile);
@@ -99,19 +139,18 @@ public class ImageSaver extends CordovaPlugin {
 
 			retVal = imageFile;
 		} catch (Exception e) {
-			Log.e("ImageSaver", "An exception occured while saving image: "
-					+ e.toString());
+			Log.e("ImageSaver", "An exception occured while saving image: " +
+				e.toString());
 		}
 		return retVal;
 	}
-	
+
 	/* Invoke the system's media scanner to add your photo to the Media Provider's database, 
 	 * making it available in the Android Gallery application and to other apps. */
-	private void scanPhoto(File imageFile)
-	{
+	private void scanPhoto(File imageFile) {
 		Intent mediaScanIntent = new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE);
-	    Uri contentUri = Uri.fromFile(imageFile);
-	    mediaScanIntent.setData(contentUri);	      		  
-	    cordova.getActivity().sendBroadcast(mediaScanIntent);
-	} 
+		Uri contentUri = Uri.fromFile(imageFile);
+		mediaScanIntent.setData(contentUri);
+		cordova.getActivity().sendBroadcast(mediaScanIntent);
+	}
 }
